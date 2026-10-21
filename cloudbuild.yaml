@@ -1,0 +1,60 @@
+# Google Cloud Build configuration for SkySim AI
+# Enforces Section 7 Guardrail #2: --max-instances=3 to prevent runaway cold-start cost spikes.
+
+steps:
+  # 1. Run backend unit test suite (Trajectory B-Spline math, Exporters, FAA Part 107 Disclaimers)
+  - name: 'python:3.11-slim'
+    id: 'run-backend-tests'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install --no-cache-dir -r backend/requirements.txt
+        PYTHONPATH=backend pytest backend/tests -v
+
+  # 2. Build container image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-container-image'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/skysim-ai-backend:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/skysim-ai-backend:latest'
+      - '.'
+
+  # 3. Push container image to Artifact Registry / Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-container-image'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/skysim-ai-backend:$COMMIT_SHA'
+
+  # 4. Deploy to Cloud Run with strict max-instances=3 budget guardrail
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-cloud-run'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'skysim-ai-backend'
+      - '--image=gcr.io/$PROJECT_ID/skysim-ai-backend:$COMMIT_SHA'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--max-instances=3'
+      - '--min-instances=0'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--set-env-vars=GCP_MONTHLY_BUDGET_USD=100.0,CLOUD_RUN_MAX_INSTANCES=3,GCS_UPLOAD_BUCKET=${_GCS_BUCKET}'
+
+substitutions:
+  _REGION: 'us-east1'
+  _GCS_BUCKET: 'skysim-ai-raw-uploads'
+
+images:
+  - 'gcr.io/$PROJECT_ID/skysim-ai-backend:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/skysim-ai-backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
