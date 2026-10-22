@@ -1,7 +1,7 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_API_URL=https://skysim-ai-backend-745110910494.us-east1.run.app
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 COPY package.json package-lock.json ./
