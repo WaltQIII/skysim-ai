@@ -43,6 +43,28 @@ app.include_router(uploads_router)
 app.include_router(billing_router)
 
 
+@app.get("/")
+def root_api_index():
+    """Root API index providing service metadata, active guardrails, and documentation links."""
+    return {
+        "service": "SkySim AI Autonomous Trajectory & Pre-Visualization API",
+        "version": "1.0.0",
+        "status": "online",
+        "frontend_dashboard_url": "http://localhost:3000",
+        "interactive_docs_url": "http://localhost:8000/docs",
+        "openapi_schema_url": "http://localhost:8000/openapi.json",
+        "health_check_url": "http://localhost:8000/api/health",
+        "endpoints": {
+            "missions": "/api/missions",
+            "trajectory_compute": "/api/trajectory/compute",
+            "gcs_signed_uploads": "/api/uploads/signed-url",
+            "auth_profile": "/api/auth/me",
+            "stripe_checkout": "/api/billing/checkout-session",
+            "florida_saas_tax": "/api/billing/calculate-tax",
+        },
+    }
+
+
 @app.get("/health")
 @app.get("/api/health")
 def health_check():
