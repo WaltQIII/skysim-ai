@@ -298,3 +298,42 @@ def test_airspace_ceiling_and_client_share_approval():
     assert approved_mission["client_approved"] is True
     assert approved_mission["client_approved_by"] == "owner@coralgablesestate.com"
     assert approved_mission["client_approved_at"] is not None
+
+
+def test_pilot_register_and_login_flow():
+    unique_email = f"pilot_{uuid4().hex[:8]}@skysim.ai"
+    reg_resp = client.post(
+        "/api/auth/register",
+        json={
+            "email": unique_email,
+            "password": "SecureDronePassword107!",
+            "full_name": "Capt. Walter Quarles",
+            "rpic_certificate_number": "RPIC-499102",
+        },
+    )
+    assert reg_resp.status_code == 201
+    reg_data = reg_resp.json()
+    token = reg_data["access_token"]
+    assert token.startswith("skysim-token-")
+    assert reg_data["user"]["email"] == unique_email
+    assert reg_data["user"]["full_name"] == "Capt. Walter Quarles"
+
+    # Login with valid password
+    login_resp = client.post(
+        "/api/auth/login",
+        json={"email": unique_email, "password": "SecureDronePassword107!"},
+    )
+    assert login_resp.status_code == 200
+    assert login_resp.json()["access_token"] == token
+
+    # Verify /api/auth/me with signed token
+    me_resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_resp.status_code == 200
+    assert me_resp.json()["email"] == unique_email
+
+    # Wrong password rejected with 401
+    bad_login = client.post(
+        "/api/auth/login",
+        json={"email": unique_email, "password": "WrongPassword"},
+    )
+    assert bad_login.status_code == 401

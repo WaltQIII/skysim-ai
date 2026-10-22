@@ -166,12 +166,65 @@ export default function SkySimDashboardPage() {
     ],
   });
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
-  const [userEmail] = useState<string>("pilot@skysim.ai");
+  const [userEmail, setUserEmail] = useState<string>("pilot@skysim.ai");
   const [userPlan, setUserPlan] = useState<string>("pro_monthly");
+  const [userId, setUserId] = useState<string>("00000000-0000-4000-8000-000000000001");
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<"register" | "login">("register");
+  const [authEmailInput, setAuthEmailInput] = useState<string>("");
+  const [authPasswordInput, setAuthPasswordInput] = useState<string>("");
+  const [authNameInput, setAuthNameInput] = useState<string>("");
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const activePoint =
     points[Math.min(selectedSampleIdx, Math.max(points.length - 1, 0))] ||
     points[0];
+
+  async function handleAuthSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAuthError(null);
+    const endpoint = authMode === "register" ? "/api/auth/register" : "/api/auth/login";
+    const payload =
+      authMode === "register"
+        ? {
+            email: authEmailInput.trim(),
+            password: authPasswordInput,
+            full_name: authNameInput.trim() || "Commercial Drone Operator",
+            rpic_certificate_number: rpicCertificateId,
+          }
+        : {
+            email: authEmailInput.trim(),
+            password: authPasswordInput,
+          };
+
+    try {
+      const resp = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        setAuthError(errData.detail || "Authentication failed. Please check your credentials.");
+        return;
+      }
+      const data = await resp.json();
+      setAuthToken(data.access_token);
+      setUserEmail(data.user.email);
+      setUserPlan(data.user.plan);
+      setUserId(data.user.id);
+      if (data.user.rpic_certificate_number) {
+        setRpicCertificateId(data.user.rpic_certificate_number);
+      }
+      setAuthModalOpen(false);
+      setStatusBanner(
+        `Signed in as ${data.user.email} (${data.user.plan.toUpperCase()} tier synced with Google Cloud Firestore).`
+      );
+    } catch {
+      setAuthError("Could not reach authentication server. Please try again.");
+    }
+  }
 
   async function handleStartStripeCheckout(targetPlan: "pro_monthly" | "enterprise") {
     setStatusBanner(`Creating Stripe Checkout Session (${targetPlan}, tax_code=txcd_10103001)...`);
@@ -180,6 +233,7 @@ export default function SkySimDashboardPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          user_id: userId,
           customer_email: userEmail,
           plan: targetPlan,
           billing_state: "FL",
@@ -208,6 +262,7 @@ export default function SkySimDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: missionName,
+          user_id: userId,
           bounding_box: {
             min_lat: Number((propertyLat - 0.0008).toFixed(6)),
             min_lon: Number((propertyLon - 0.0008).toFixed(6)),
@@ -533,10 +588,19 @@ export default function SkySimDashboardPage() {
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <div className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700">
-              <span className="text-slate-400">Firestore Auth:</span>{" "}
+              <span className="text-slate-400">Pilot Account:</span>{" "}
               <strong className="text-white">{userEmail}</strong>{" "}
               <span className="text-cyan-400 uppercase">({userPlan})</span>
             </div>
+            <button
+              onClick={() => {
+                setAuthError(null);
+                setAuthModalOpen(true);
+              }}
+              className="px-3 py-1.5 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold transition"
+            >
+              {authToken ? "Switch Account" : "Sign Up / Log In"}
+            </button>
             <button
               onClick={() => handleStartStripeCheckout("enterprise")}
               className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition"
@@ -546,10 +610,6 @@ export default function SkySimDashboardPage() {
             <div className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700">
               <span className="text-slate-400">Cloud Run Cap:</span>{" "}
               <strong className="text-emerald-400">max-instances=3</strong>
-            </div>
-            <div className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700">
-              <span className="text-slate-400">Speed Clamps:</span>{" "}
-              <strong className="text-cyan-300">&le;15 m/s H | &le;5 m/s V</strong>
             </div>
           </div>
         </div>
@@ -1177,6 +1237,138 @@ export default function SkySimDashboardPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Pilot Account Sign-Up / Sign-In Modal (Firestore Backed) */}
+      {authModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        >
+          <form
+            onSubmit={handleAuthSubmit}
+            className="max-w-md w-full rounded-xl border border-cyan-500/40 bg-slate-900 p-6 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white">
+                {authMode === "register"
+                  ? "Create Pilot Account"
+                  : "Sign In to SkySim AI"}
+              </h3>
+              <div className="flex rounded-lg bg-slate-950 p-1 text-xs border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("register");
+                    setAuthError(null);
+                  }}
+                  className={`px-2.5 py-1 rounded ${
+                    authMode === "register"
+                      ? "bg-cyan-500 text-slate-950 font-semibold"
+                      : "text-slate-400"
+                  }`}
+                >
+                  Sign Up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setAuthError(null);
+                  }}
+                  className={`px-2.5 py-1 rounded ${
+                    authMode === "login"
+                      ? "bg-cyan-500 text-slate-950 font-semibold"
+                      : "text-slate-400"
+                  }`}
+                >
+                  Log In
+                </button>
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-2.5 rounded bg-rose-950/80 border border-rose-500/40 text-xs text-rose-200">
+                {authError}
+              </div>
+            )}
+
+            {authMode === "register" && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  Full Name or Company
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g., Walter Quarles / SkyView Aerials"
+                  value={authNameInput}
+                  onChange={(e) => setAuthNameInput(e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-white"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Work Email
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="pilot@yourcompany.com"
+                value={authEmailInput}
+                onChange={(e) => setAuthEmailInput(e.target.value)}
+                className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">
+                Password (min 6 characters)
+              </label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={authPasswordInput}
+                onChange={(e) => setAuthPasswordInput(e.target.value)}
+                className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {authMode === "register" && (
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  FAA Part 107 Remote Pilot Certificate # (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={rpicCertificateId}
+                  onChange={(e) => setRpicCertificateId(e.target.value)}
+                  className="w-full rounded-lg bg-slate-950 border border-slate-800 px-3 py-2 text-sm text-white"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setAuthModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300"
+              >
+                Continue as Guest Demo
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition"
+              >
+                {authMode === "register" ? "Create Account" : "Sign In"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

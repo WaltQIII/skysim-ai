@@ -156,6 +156,9 @@ class SignedUploadUrlItem(BaseModel):
 class UserRecord(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     email: str
+    full_name: str = Field(default="Commercial Drone Operator")
+    rpic_certificate_number: Optional[str] = Field(default=None)
+    password_hash: Optional[str] = Field(default=None)
     plan: UserPlan = UserPlan.TRIAL
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
