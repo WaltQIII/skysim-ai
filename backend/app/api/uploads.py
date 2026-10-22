@@ -70,8 +70,9 @@ def generate_signed_upload_url(
         raise ValueError("expiration must be between 1 and 60 minutes")
 
     force_mock = os.getenv("SKYSIM_USE_MOCK_GCS", "false").lower() in ("1", "true", "yes")
+    has_gcp_creds = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("K_SERVICE"))
 
-    if not force_mock or storage_client is not None:
+    if storage_client is not None or (has_gcp_creds and not force_mock):
         try:
             client = storage_client or storage.Client()
             bucket = client.bucket(bucket_name)
