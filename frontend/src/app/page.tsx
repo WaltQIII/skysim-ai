@@ -170,7 +170,8 @@ export default function SkySimDashboardPage() {
   const [userPlan, setUserPlan] = useState<string>("pro_monthly");
   const [userId, setUserId] = useState<string>("00000000-0000-4000-8000-000000000001");
   const [authToken, setAuthToken] = useState<string | null>(null);
-  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(true);
+  const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<"register" | "login">("register");
   const [authEmailInput, setAuthEmailInput] = useState<string>("");
   const [authPasswordInput, setAuthPasswordInput] = useState<string>("");
@@ -592,6 +593,12 @@ export default function SkySimDashboardPage() {
               <strong className="text-white">{userEmail}</strong>{" "}
               <span className="text-cyan-400 uppercase">({userPlan})</span>
             </div>
+            <button
+              onClick={() => setGuideModalOpen(true)}
+              className="px-3 py-1.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/50 text-emerald-300 font-semibold transition"
+            >
+              📘 How to Use (Tester Guide)
+            </button>
             <button
               onClick={() => {
                 setAuthError(null);
@@ -1249,8 +1256,17 @@ export default function SkySimDashboardPage() {
         >
           <form
             onSubmit={handleAuthSubmit}
-            className="max-w-md w-full rounded-xl border border-cyan-500/40 bg-slate-900 p-6 space-y-4 shadow-2xl"
+            className="max-w-lg w-full rounded-xl border border-cyan-500/40 bg-slate-900 p-6 space-y-4 shadow-2xl"
           >
+            <div className="p-3 rounded-lg bg-cyan-950/50 border border-cyan-500/30 text-xs text-cyan-100 space-y-1">
+              <div className="font-bold text-cyan-300">
+                Welcome to SkySim AI — 3D Drone Flight Pre-Visualization Studio
+              </div>
+              <p className="text-slate-300 leading-relaxed">
+                Plan, preview, and safety-check commercial drone camera flights in 3D before flying on-site. Create your free Pilot Account below to save missions, or click <strong>&ldquo;Try Interactive Demo&rdquo;</strong> to explore immediately.
+              </p>
+            </div>
+
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">
                 {authMode === "register"
@@ -1342,7 +1358,7 @@ export default function SkySimDashboardPage() {
             {authMode === "register" && (
               <div>
                 <label className="block text-xs text-slate-400 mb-1">
-                  FAA Part 107 Remote Pilot Certificate # (Optional)
+                  FAA Part 107 Remote Pilot Certificate # (Optional — for non-pilots, leave default)
                 </label>
                 <input
                   type="text"
@@ -1353,22 +1369,110 @@ export default function SkySimDashboardPage() {
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800">
               <button
                 type="button"
-                onClick={() => setAuthModalOpen(false)}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300"
+                onClick={() => {
+                  setAuthModalOpen(false);
+                  setGuideModalOpen(true);
+                }}
+                className="px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs text-emerald-300 font-semibold"
               >
-                Continue as Guest Demo
+                📘 Open 4-Step Tester Guide
               </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition"
-              >
-                {authMode === "register" ? "Create Account" : "Sign In"}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAuthModalOpen(false)}
+                  className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300"
+                >
+                  Try Interactive Demo
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition"
+                >
+                  {authMode === "register" ? "Create Account" : "Sign In"}
+                </button>
+              </div>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Plain-English 4-Step Tester & Non-Pilot Guide Modal */}
+      {guideModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        >
+          <div className="max-w-2xl w-full rounded-xl border border-emerald-500/50 bg-slate-900 p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+                Plain-English Tester Walkthrough (No Drone Experience Needed)
+              </span>
+              <button
+                onClick={() => setGuideModalOpen(false)}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                Close ✕
+              </button>
+            </div>
+            <h3 className="text-xl font-bold text-white">
+              What is SkySim AI &amp; How Do I Test It in 60 Seconds?
+            </h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Think of <strong>SkySim AI</strong> as <em>&ldquo;Google Earth Studio + Autopilot for Real Estate &amp; Inspection Drones.&rdquo;</em> Instead of a drone pilot guessing how to fly around a luxury house or building on-site (risking tree crashes or shaky video), they plan the exact 3D camera path in their browser first, get an AI safety &amp; framing score, let the property owner approve the preview, and download the autopilot file for their drone.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <div className="font-bold text-cyan-400">
+                  Step 1: Customize the 3D Flight Path (Left Panel)
+                </div>
+                <p className="text-slate-300">
+                  Move the sliders on the left (<strong>Orbit Radius</strong>, <strong>Target Altitude</strong>, and <strong>Cruise Speed</strong>) and click the blue <strong>&ldquo;Recompute 3D Spline &amp; Run Gemini Audit&rdquo;</strong> button. Watch the math engine smoothly recalculate the flight path and clamp the drone&apos;s speed so it never exceeds safe limits.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <div className="font-bold text-cyan-400">
+                  Step 2: Scrub the 3D Flight &amp; Camera Viewfinder (Center Panel)
+                </div>
+                <p className="text-slate-300">
+                  Drag the <strong>Timeline Scrubber</strong> slider under the 3D view. On the left, you see the <strong>bird&apos;s-eye 3D orbit</strong> around the building and trees. On the right, you see the <strong>16:9 Drone Camera Viewfinder</strong> showing exactly what the drone&apos;s camera is filming at that second.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <div className="font-bold text-cyan-400">
+                  Step 3: Check AI Safety Score &amp; Client Approval
+                </div>
+                <p className="text-slate-300">
+                  Review the <strong>Gemini Ultra Safety &amp; Framing Audit</strong> scores (e.g., tree clearance warnings and camera tilt tips), and click <strong>&ldquo;Record Client Shot-List Approval&rdquo;</strong> to simulate a real-estate client approving the shot before the pilot drives to the property.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+                <div className="font-bold text-cyan-400">
+                  Step 4: Complete the FAA Safety Checklist &amp; Download Drone File
+                </div>
+                <p className="text-slate-300">
+                  Check the 3 <strong>FAA Part 107 Pre-Flight Checkboxes</strong> on the bottom-left, then click any <strong>Export button (.KMZ for DJI Drones, .PLAN for Autel/PX4, or .JSON)</strong>. A mandatory legal sign-off pops up, and then your browser downloads the actual autonomous flight file!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setGuideModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs transition"
+              >
+                Got It — Start Testing SkySim AI
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
