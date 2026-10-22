@@ -1,15 +1,21 @@
-"""Integration tests for GCS Direct Uploads, Missions API, Fail-Closed Quota, and FL SaaS Tax."""
+"""Integration tests for GCS Direct Uploads, Missions API, Firestore, Firebase Auth, and Stripe Tax."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import json
+import time
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.api.uploads import generate_signed_upload_url
 from app.main import app
-from app.models.schemas import MANDATORY_PIC_DISCLAIMER
+from app.models.schemas import MANDATORY_PIC_DISCLAIMER, UserPlan, UserRecord
+from app.services.store import FirestoreDatabaseStore
 
 client = TestClient(app)
 
@@ -143,3 +149,111 @@ def test_florida_b2b_saas_tax_exemption():
     assert data["product_metadata"]["product_classification"] == "cloud_hosted_saas"
     assert data["product_metadata"]["tangible_personal_property_transferred"] is False
     assert data["product_metadata"]["florida_dor_saas_exempt"] is True
+
+
+def test_firestore_persistence_with_mock_client():
+    mock_fs = MagicMock()
+    store = FirestoreDatabaseStore(firestore_client=mock_fs)
+
+    user = UserRecord(id=uuid4(), email="firestore_pilot@skysim.ai", plan=UserPlan.PRO_MONTHLY)
+    store.upsert_user(user)
+    mock_fs.collection.assert_called_with("users")
+
+    log_entry = store.log_pic_compliance_event(
+        mission_id=uuid4(),
+        user_id=user.id,
+        pilot_name_or_cert="RPIC-FS-107",
+        laanc_verified=True,
+        acknowledged_at=datetime.now(timezone.utc),
+    )
+    assert log_entry["pilot_name_or_cert"] == "RPIC-FS-107"
+    mock_fs.collection.assert_called_with("compliance_audit_logs")
+
+
+def test_firebase_auth_sync_and_profile():
+    sync_resp = client.post(
+        "/api/auth/sync",
+        json={
+            "email": "miami_operator@skysim.ai",
+            "firebase_uid": "firebase-uid-998877",
+            "plan": "trial",
+        },
+    )
+    assert sync_resp.status_code == 200
+    synced = sync_resp.json()
+    assert synced["email"] == "miami_operator@skysim.ai"
+    assert synced["plan"] == "trial"
+
+    me_resp = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer dev-token-{synced['id']}"},
+    )
+    assert me_resp.status_code == 200
+    assert me_resp.json()["email"] == "miami_operator@skysim.ai"
+
+
+def test_stripe_checkout_session_and_signed_webhook(monkeypatch):
+    # 1. Create Stripe Checkout Session with txcd_10103001
+    uid = str(uuid4())
+    checkout_resp = client.post(
+        "/api/billing/checkout-session",
+        json={
+            "user_id": uid,
+            "customer_email": "enterprise@skysim.ai",
+            "plan": "enterprise",
+            "billing_state": "FL",
+        },
+    )
+    assert checkout_resp.status_code == 200
+    cs = checkout_resp.json()
+    assert cs["session_id"].startswith("cs_test_")
+    assert cs["stripe_tax_code"] == "txcd_10103001"
+    assert cs["automatic_tax_enabled"] is True
+    assert cs["amount_tax_cents"] == 0
+    assert cs["amount_total_cents"] == 29900
+
+    # 2. Verify Stripe Webhook with HMAC-SHA256 signature verification
+    webhook_secret = "whsec_test_secret_key_12345"
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", webhook_secret)
+
+    event_payload = json.dumps(
+        {
+            "id": "evt_test_123",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": cs["session_id"],
+                    "client_reference_id": uid,
+                    "customer_email": "enterprise@skysim.ai",
+                    "metadata": {
+                        "user_id": uid,
+                        "plan": "enterprise",
+                        "stripe_tax_code": "txcd_10103001",
+                    },
+                }
+            },
+        }
+    ).encode("utf-8")
+
+    ts = str(int(time.time()))
+    signed_str = f"{ts}.{event_payload.decode('utf-8')}".encode("utf-8")
+    sig = hmac.new(webhook_secret.encode("utf-8"), signed_str, hashlib.sha256).hexdigest()
+    stripe_sig_header = f"t={ts},v1={sig}"
+
+    wh_resp = client.post(
+        "/api/billing/stripe-webhook",
+        content=event_payload,
+        headers={"Stripe-Signature": stripe_sig_header},
+    )
+    assert wh_resp.status_code == 200
+    wh_data = wh_resp.json()
+    assert wh_data["status"] == "processed"
+    assert wh_data["updated_plan"] == "enterprise"
+
+    # Invalid signature must be rejected with 400
+    bad_resp = client.post(
+        "/api/billing/stripe-webhook",
+        content=event_payload,
+        headers={"Stripe-Signature": f"t={ts},v1=deadbeef"},
+    )
+    assert bad_resp.status_code == 400

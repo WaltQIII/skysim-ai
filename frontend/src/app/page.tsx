@@ -160,10 +160,39 @@ export default function SkySimDashboardPage() {
     ],
   });
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [userEmail] = useState<string>("pilot@skysim.ai");
+  const [userPlan, setUserPlan] = useState<string>("pro_monthly");
 
   const activePoint =
     points[Math.min(selectedSampleIdx, Math.max(points.length - 1, 0))] ||
     points[0];
+
+  async function handleStartStripeCheckout(targetPlan: "pro_monthly" | "enterprise") {
+    setStatusBanner(`Creating Stripe Checkout Session (${targetPlan}, tax_code=txcd_10103001)...`);
+    try {
+      const resp = await fetch(`${API_BASE}/api/billing/checkout-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_email: userEmail,
+          plan: targetPlan,
+          billing_state: "FL",
+        }),
+      });
+      if (resp.ok) {
+        const cs = await resp.json();
+        setUserPlan(targetPlan);
+        setStatusBanner(
+          `Stripe Checkout Ready (${cs.session_id}) — Plan: ${cs.plan.toUpperCase()} | Tax Code: ${cs.stripe_tax_code} | FL Tax: $${(cs.amount_tax_cents / 100).toFixed(2)} | Total: $${(cs.amount_total_cents / 100).toFixed(2)}/mo`
+        );
+        return;
+      }
+    } catch {
+      // Offline preview fallback
+    }
+    setUserPlan(targetPlan);
+    setStatusBanner(`Switched preview tier to ${targetPlan.toUpperCase()} (txcd_10103001 FL SaaS Exempt).`);
+  }
 
   async function handleComputeAndAuditMission() {
     setStatusBanner("Computing 3D Cubic B-Spline trajectory & Gemini Ultra framing audit...");
@@ -410,7 +439,18 @@ export default function SkySimDashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700">
+              <span className="text-slate-400">Firestore Auth:</span>{" "}
+              <strong className="text-white">{userEmail}</strong>{" "}
+              <span className="text-cyan-400 uppercase">({userPlan})</span>
+            </div>
+            <button
+              onClick={() => handleStartStripeCheckout("enterprise")}
+              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition"
+            >
+              Stripe Upgrade (txcd_10103001)
+            </button>
             <div className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700">
               <span className="text-slate-400">Cloud Run Cap:</span>{" "}
               <strong className="text-emerald-400">max-instances=3</strong>
@@ -629,104 +669,172 @@ export default function SkySimDashboardPage() {
               </div>
             </div>
 
-            {/* SVG 3D Orbital / Top-Down + Elevation Viewport */}
-            <div className="relative h-72 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center p-4">
-              <svg
-                viewBox="-70 -70 140 140"
-                className="w-full h-full max-w-md max-h-64"
-              >
-                {/* Reference grid */}
-                <circle
-                  cx="0"
-                  cy="0"
-                  r="42"
-                  fill="none"
-                  stroke="#1e293b"
-                  strokeWidth="0.6"
-                  strokeDasharray="2 2"
-                />
-                <circle
-                  cx="0"
-                  cy="0"
-                  r="25"
-                  fill="none"
-                  stroke="#1e293b"
-                  strokeWidth="0.5"
-                />
-                {/* Northern Tree Canopy Obstacle + Buffer Zone */}
-                <circle
-                  cx="12"
-                  cy="-34"
-                  r="9.5"
-                  fill="rgba(245, 158, 11, 0.12)"
-                  stroke="#f59e0b"
-                  strokeWidth="0.6"
-                  strokeDasharray="1.5 1.5"
-                />
-                <circle cx="12" cy="-34" r="4.5" fill="#15803d" />
+            {/* Split-Screen: 3D Orbital Spline Map + 16:9 First-Person Gimbal Viewfinder */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left Pane: Project Genie Orbital 3D Trajectory Map */}
+              <div className="relative h-72 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex items-center justify-center p-4">
+                <span className="absolute top-2.5 left-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Project Genie Spatial Orbit
+                </span>
+                <svg
+                  viewBox="-70 -70 140 140"
+                  className="w-full h-full max-w-xs max-h-56"
+                >
+                  {/* Reference grid */}
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="42"
+                    fill="none"
+                    stroke="#1e293b"
+                    strokeWidth="0.6"
+                    strokeDasharray="2 2"
+                  />
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="25"
+                    fill="none"
+                    stroke="#1e293b"
+                    strokeWidth="0.5"
+                  />
+                  {/* Northern Tree Canopy Obstacle + Buffer Zone */}
+                  <circle
+                    cx="12"
+                    cy="-34"
+                    r="9.5"
+                    fill="rgba(245, 158, 11, 0.12)"
+                    stroke="#f59e0b"
+                    strokeWidth="0.6"
+                    strokeDasharray="1.5 1.5"
+                  />
+                  <circle cx="12" cy="-34" r="4.5" fill="#15803d" />
 
-                {/* Subject Focal Point (Property Center) */}
-                <circle
-                  cx="0"
-                  cy="0"
-                  r="3.2"
-                  fill="#38bdf8"
-                  stroke="#ffffff"
-                  strokeWidth="0.8"
-                />
+                  {/* Subject Focal Point (Property Center) */}
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r="3.2"
+                    fill="#38bdf8"
+                    stroke="#ffffff"
+                    strokeWidth="0.8"
+                  />
 
-                {/* Interpolated Cubic B-Spline Polyline */}
-                <polyline
-                  fill="none"
-                  stroke="#22d3ee"
-                  strokeWidth="1.5"
-                  points={points
-                    .map((p) => `${p.local_x_m},${-p.local_y_m}`)
-                    .join(" ")}
-                />
+                  {/* Interpolated Cubic B-Spline Polyline */}
+                  <polyline
+                    fill="none"
+                    stroke="#22d3ee"
+                    strokeWidth="1.5"
+                    points={points
+                      .map((p) => `${p.local_x_m},${-p.local_y_m}`)
+                      .join(" ")}
+                  />
 
-                {/* Gimbal sightline from active drone position to Subject Focal Point */}
-                {activePoint && (
-                  <>
-                    <line
-                      x1={activePoint.local_x_m}
-                      y1={-activePoint.local_y_m}
-                      x2={0}
-                      y2={0}
-                      stroke="#f43f5e"
-                      strokeWidth="0.9"
-                      strokeDasharray="2 1.5"
-                    />
-                    <circle
-                      cx={activePoint.local_x_m}
-                      cy={-activePoint.local_y_m}
-                      r="3.5"
-                      fill="#f43f5e"
-                      stroke="#ffffff"
-                      strokeWidth="1"
-                    />
-                  </>
-                )}
-              </svg>
+                  {/* Gimbal sightline from active drone position to Subject Focal Point */}
+                  {activePoint && (
+                    <>
+                      <line
+                        x1={activePoint.local_x_m}
+                        y1={-activePoint.local_y_m}
+                        x2={0}
+                        y2={0}
+                        stroke="#f43f5e"
+                        strokeWidth="0.9"
+                        strokeDasharray="2 1.5"
+                      />
+                      <circle
+                        cx={activePoint.local_x_m}
+                        cy={-activePoint.local_y_m}
+                        r="3.5"
+                        fill="#f43f5e"
+                        stroke="#ffffff"
+                        strokeWidth="1"
+                      />
+                    </>
+                  )}
+                </svg>
+              </div>
 
-              {/* Live Telemetry Overlay */}
-              {activePoint && (
-                <div className="absolute bottom-3 left-3 right-3 bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                  <span>
-                    WP #{activePoint.index} (t={activePoint.timestamp_s}s)
+              {/* Right Pane: 16:9 First-Person Gimbal Camera Viewfinder with Rule-of-Thirds Grid */}
+              <div className="relative h-72 rounded-lg bg-slate-950 border border-slate-800 overflow-hidden flex flex-col justify-between p-4">
+                <div className="flex items-center justify-between text-[11px] z-10">
+                  <span className="font-semibold uppercase tracking-wider text-cyan-300">
+                    16:9 Gimbal Camera Viewfinder (24mm)
                   </span>
-                  <span>
-                    Lat/Lon: {activePoint.lat.toFixed(5)},{" "}
-                    {activePoint.lon.toFixed(5)}
-                  </span>
-                  <span>AGL: {activePoint.alt_agl}m</span>
-                  <span className="text-cyan-300">
-                    Gimbal Pitch: {activePoint.gimbal_pitch_deg}&deg; | Yaw:{" "}
-                    {activePoint.gimbal_yaw_deg}&deg;
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">
+                    REC PRE-VIZ
                   </span>
                 </div>
-              )}
+
+                {/* Simulated 3D Perspective Horizon & Subject Framing with Rule-of-Thirds Grid */}
+                <svg viewBox="0 0 160 90" className="w-full h-44 rounded border border-slate-800/80 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950">
+                  {/* Dynamic Horizon Line shifted by gimbal pitch */}
+                  {activePoint && (
+                    <>
+                      <line
+                        x1="0"
+                        y1={Math.min(Math.max(20 - activePoint.gimbal_pitch_deg * 0.6, 10), 75)}
+                        x2="160"
+                        y2={Math.min(Math.max(20 - activePoint.gimbal_pitch_deg * 0.6, 10), 75)}
+                        stroke="#334155"
+                        strokeWidth="0.6"
+                      />
+                      {/* Reconstructed Property Structure in Center Rule-of-Thirds Box */}
+                      <rect
+                        x={62 + Math.sin((activePoint.gimbal_yaw_deg * Math.PI) / 180) * 6}
+                        y="36"
+                        width="36"
+                        height="22"
+                        fill="rgba(56, 189, 248, 0.18)"
+                        stroke="#38bdf8"
+                        strokeWidth="0.9"
+                      />
+                      {/* Northern Tree Canopy in peripheral view */}
+                      <circle
+                        cx={112 + Math.cos((activePoint.gimbal_yaw_deg * Math.PI) / 180) * 14}
+                        cy="44"
+                        r="10"
+                        fill="rgba(21, 128, 61, 0.35)"
+                        stroke="#22c55e"
+                        strokeWidth="0.7"
+                      />
+                    </>
+                  )}
+                  {/* Rule of Thirds Grid Overlay (Gemini Ultra Framing Audit Reference) */}
+                  <line x1="53.3" y1="0" x2="53.3" y2="90" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" strokeDasharray="2 2" />
+                  <line x1="106.6" y1="0" x2="106.6" y2="90" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" strokeDasharray="2 2" />
+                  <line x1="0" y1="30" x2="160" y2="30" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" strokeDasharray="2 2" />
+                  <line x1="0" y1="60" x2="160" y2="60" stroke="rgba(255,255,255,0.18)" strokeWidth="0.4" strokeDasharray="2 2" />
+                  {/* Center Crosshair */}
+                  <circle cx="80" cy="45" r="2" fill="none" stroke="#f43f5e" strokeWidth="0.6" />
+                </svg>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                  <span>Rule-of-Thirds: LOCKED</span>
+                  <span>
+                    Clearance: {activePoint ? `${activePoint.clearance_margin_m}m` : "9.2m"}
+                  </span>
+                </div>
+              </div>
             </div>
+
+            {/* Live Telemetry Bar */}
+            {activePoint && (
+              <div className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                <span>
+                  WP #{activePoint.index} (t={activePoint.timestamp_s}s)
+                </span>
+                <span>
+                  Lat/Lon: {activePoint.lat.toFixed(5)},{" "}
+                  {activePoint.lon.toFixed(5)}
+                </span>
+                <span>AGL: {activePoint.alt_agl}m</span>
+                <span className="text-cyan-300">
+                  Gimbal Pitch: {activePoint.gimbal_pitch_deg}&deg; | Yaw:{" "}
+                  {activePoint.gimbal_yaw_deg}&deg;
+                </span>
+              </div>
+            )}
 
             {/* Keyframe Scrubber */}
             <div className="space-y-1">

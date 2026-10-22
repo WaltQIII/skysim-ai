@@ -169,9 +169,17 @@ def acknowledge_pic_liability(mission_id: UUID, req: PICAcknowledgmentRequest) -
             detail="RPIC FAA Part 107 acknowledgment must be explicitly set to True.",
         )
 
+    now_utc = datetime.now(timezone.utc)
     mission.pic_acknowledged = True
-    mission.pic_acknowledged_at = datetime.now(timezone.utc)
+    mission.pic_acknowledged_at = now_utc
     mission.pic_acknowledged_by = req.pilot_name_or_cert
+    db_store.log_pic_compliance_event(
+        mission_id=mission.id,
+        user_id=mission.user_id,
+        pilot_name_or_cert=req.pilot_name_or_cert,
+        laanc_verified=req.laanc_verified,
+        acknowledged_at=now_utc,
+    )
     return db_store.save_mission(mission)
 
 

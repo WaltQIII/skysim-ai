@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router
 from app.api.missions import router as missions_router
 from app.api.uploads import router as uploads_router
@@ -36,6 +37,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(missions_router)
 app.include_router(uploads_router)
 app.include_router(billing_router)
