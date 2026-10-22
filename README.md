@@ -4,6 +4,15 @@ SkySim AI is a spatial pre-visualization and trajectory-planning platform for co
 
 ---
 
+## Live Production Deployment (Google Cloud Run)
+
+- **Live Frontend Application:** [https://skysim-ai-frontend-745110910494.us-east1.run.app](https://skysim-ai-frontend-745110910494.us-east1.run.app)
+- **Live Backend API:** [https://skysim-ai-backend-745110910494.us-east1.run.app](https://skysim-ai-backend-745110910494.us-east1.run.app)
+- **Live Interactive OpenAPI / Swagger Docs:** [https://skysim-ai-backend-745110910494.us-east1.run.app/docs](https://skysim-ai-backend-745110910494.us-east1.run.app/docs)
+- **GitHub Repository:** [https://github.com/WaltQIII/skysim-ai](https://github.com/WaltQIII/skysim-ai)
+
+---
+
 ## Architecture & Core Modules
 
 - **`backend/` (Python 3.11+ / FastAPI / SciPy / NumPy)**:
