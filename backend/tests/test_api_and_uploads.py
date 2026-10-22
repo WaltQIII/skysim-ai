@@ -257,3 +257,44 @@ def test_stripe_checkout_session_and_signed_webhook(monkeypatch):
         headers={"Stripe-Signature": f"t={ts},v1=deadbeef"},
     )
     assert bad_resp.status_code == 400
+
+
+def test_airspace_ceiling_and_client_share_approval():
+    payload = {
+        "name": "Coral Gables Estate Roof Inspection",
+        "bounding_box": {
+            "min_lat": 25.7500,
+            "min_lon": -80.2600,
+            "max_lat": 25.7520,
+            "max_lon": -80.2580,
+        },
+    }
+    create_resp = client.post("/api/missions/create", json=payload)
+    assert create_resp.status_code == 201
+    mission = create_resp.json()
+    mission_id = mission["id"]
+
+    # Verify FAA UASFM LAANC ceiling advisory is populated
+    assert mission["airspace_advisory"] is not None
+    assert mission["airspace_advisory"]["laanc_auto_ceiling_ft"] in (100, 200, 300, 400)
+    assert "airspace_class" in mission["airspace_advisory"]
+
+    # Verify read-only client share preview endpoint
+    share_resp = client.get(f"/api/missions/{mission_id}/share")
+    assert share_resp.status_code == 200
+    assert share_resp.json()["client_approved"] is False
+
+    # Verify client approval sign-off endpoint
+    approve_resp = client.post(
+        f"/api/missions/{mission_id}/client-approve",
+        json={
+            "client_name_or_email": "owner@coralgablesestate.com",
+            "approved": True,
+            "notes": "Approved 360 orbit and northern canopy clearance.",
+        },
+    )
+    assert approve_resp.status_code == 200
+    approved_mission = approve_resp.json()
+    assert approved_mission["client_approved"] is True
+    assert approved_mission["client_approved_by"] == "owner@coralgablesestate.com"
+    assert approved_mission["client_approved_at"] is not None

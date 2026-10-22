@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from app.api.uploads import DEFAULT_GCS_BUCKET, generate_batch_signed_urls
 from app.models.schemas import (
+    ClientApprovalRequest,
     MissionCreateRequest,
     MissionRecord,
     MissionStatus,
@@ -31,6 +32,7 @@ from app.models.schemas import (
     TrajectoryResult,
     WaypointInput,
 )
+from app.services.airspace import evaluate_faa_airspace_ceiling
 from app.services.exporter import (
     PICLiabilityNotAcknowledgedError,
     export_dji_kml,
@@ -116,11 +118,15 @@ def create_mission(req: MissionCreateRequest) -> MissionRecord:
         obstacles=detected_obstacles,
     )
 
+    # 5. Evaluate FAA UASFM LAANC Ceiling & Controlled Airspace status
+    airspace_advisory = evaluate_faa_airspace_ceiling(req.bounding_box)
+
     export_urls = {
         "dji_kmz": f"https://storage.googleapis.com/{DEFAULT_GCS_BUCKET}/missions/{mission_id}/exports/mission.kmz",
         "dji_kml": f"https://storage.googleapis.com/{DEFAULT_GCS_BUCKET}/missions/{mission_id}/exports/mission.kml",
         "px4_plan": f"https://storage.googleapis.com/{DEFAULT_GCS_BUCKET}/missions/{mission_id}/exports/mission.plan",
         "webgl_json": f"/api/missions/{mission_id}/export/json",
+        "client_share_url": f"/api/missions/{mission_id}/share",
     }
 
     mission = MissionRecord(
@@ -136,6 +142,7 @@ def create_mission(req: MissionCreateRequest) -> MissionRecord:
         trajectory=trajectory,
         pic_acknowledged=False,
         pic_acknowledged_at=None,
+        airspace_advisory=airspace_advisory,
     )
     return db_store.save_mission(mission)
 
@@ -180,6 +187,40 @@ def acknowledge_pic_liability(mission_id: UUID, req: PICAcknowledgmentRequest) -
         laanc_verified=req.laanc_verified,
         acknowledged_at=now_utc,
     )
+    return db_store.save_mission(mission)
+
+
+@router.get("/{mission_id}/share")
+def get_client_share_preview(mission_id: UUID):
+    """
+    Read-only shareable Client Pre-Visualization payload for real estate property owners
+    or inspection stakeholders to review and sign off on the 3D shot list before field flight.
+    """
+    mission = db_store.get_mission(mission_id)
+    if not mission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mission not found")
+    return {
+        "mission_id": str(mission.id),
+        "name": mission.name,
+        "status": mission.status.value,
+        "flight_metrics": mission.flight_metrics,
+        "audit_report": mission.audit_report,
+        "airspace_advisory": mission.airspace_advisory,
+        "client_approved": mission.client_approved,
+        "client_approved_at": mission.client_approved_at,
+        "client_approved_by": mission.client_approved_by,
+    }
+
+
+@router.post("/{mission_id}/client-approve", response_model=MissionRecord)
+def approve_mission_by_client(mission_id: UUID, req: ClientApprovalRequest) -> MissionRecord:
+    """Record property owner / inspection client sign-off on the 3D trajectory preview."""
+    mission = db_store.get_mission(mission_id)
+    if not mission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mission not found")
+    mission.client_approved = req.approved
+    mission.client_approved_at = datetime.now(timezone.utc) if req.approved else None
+    mission.client_approved_by = req.client_name_or_email
     return db_store.save_mission(mission)
 
 

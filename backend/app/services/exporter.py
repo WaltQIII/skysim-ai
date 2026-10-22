@@ -175,12 +175,31 @@ def export_dji_kmz(
         mission=mission,
         require_pic_ack=require_pic_ack,
     )
+    ack_timestamp = verify_pic_acknowledgment(mission, require_ack=require_pic_ack)
+    safe_disclaimer = escape(MANDATORY_PIC_DISCLAIMER)
+    waylines_wpml = kml_xml.replace(
+        "<wpml:missionConfig>",
+        """<wpml:missionConfig>
+      <wpml:droneInfo>
+        <wpml:droneEnumValue>67</wpml:droneEnumValue>
+        <wpml:droneSubEnumValue>0</wpml:droneSubEnumValue>
+      </wpml:droneInfo>
+      <wpml:payloadInfo>
+        <wpml:payloadEnumValue>52</wpml:payloadEnumValue>
+        <wpml:payloadPositionIndex>0</wpml:payloadPositionIndex>
+      </wpml:payloadInfo>""",
+        1,
+    ).replace(
+        "<wpml:templateId>0</wpml:templateId>",
+        f"<wpml:templateId>0</wpml:templateId>\n      <wpml:executeHeightMode>relativeToStartPoint</wpml:executeHeightMode>\n      <!-- RPIC Verified At {ack_timestamp}: {safe_disclaimer} -->",
+        1,
+    )
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.comment = MANDATORY_PIC_DISCLAIMER.encode("utf-8")
         zf.writestr("doc.kml", kml_xml.encode("utf-8"))
         zf.writestr("wpmz/template.kml", kml_xml.encode("utf-8"))
-        zf.writestr("wpmz/waylines.wpml", kml_xml.encode("utf-8"))
+        zf.writestr("wpmz/waylines.wpml", waylines_wpml.encode("utf-8"))
     return buffer.getvalue()
 
 

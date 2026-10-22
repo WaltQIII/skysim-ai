@@ -174,7 +174,17 @@ class MissionRecord(BaseModel):
     pic_acknowledged: bool = False
     pic_acknowledged_at: Optional[datetime] = None
     pic_acknowledged_by: Optional[str] = None
+    client_approved: bool = False
+    client_approved_at: Optional[datetime] = None
+    client_approved_by: Optional[str] = None
+    airspace_advisory: Optional[Dict[str, Any]] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ClientApprovalRequest(BaseModel):
+    client_name_or_email: str = Field(..., min_length=2, description="Property owner or inspection client name/email")
+    approved: bool = Field(default=True, description="Client sign-off approval on the 3D shot list")
+    notes: Optional[str] = Field(default=None)
 
 
 class PICAcknowledgmentRequest(BaseModel):
